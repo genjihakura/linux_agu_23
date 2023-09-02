@@ -10,7 +10,7 @@ SRC_DIR := $(CUR_DIR)/src
 OBJ_DIR := $(CUR_DIR)/obj
 LIB_DIR := $(CUR_DIR)/lib
 LIB_STATIC := $(LIB_DIR)/static
-LIB_SHARE := $(LIB_DIR)/shared
+LIB_SHARE := $(LIB_DIR)/share
 
 INC_FLAG := -I $(INC_DIR)
 
@@ -27,12 +27,16 @@ mkstatic: objs
 mkshare: objs
 	$(CC) -shared -o $(LIB_SHARE)/libhello.so $(OBJ_DIR)/hello_phat.o $(OBJ_DIR)/hello_world.o
 	
-all: mkshare
-	$(CC) $(OBJ_DIR)/main.o -L$(LIB_SHARE) -l$(PROJECT) -o $(BIN_DIR)/$(PROJECT)
+install:
+	export LD_LIBRARY_PATH=$(pwd)/$(LIB_SHARE)
 
+all: mkshare install
+	$(CC) $(OBJ_DIR)/main.o -L$(LIB_SHARE) -l$(PROJECT) -o $(BIN_DIR)/$(PROJECT)
+	
 
 
 clean:
 	rm -f $(OBJ_DIR)/* \
 	$(BIN_DIR)/* \
-	$(LIB_STATIC)/* 
+	$(LIB_STATIC)/* \
+	$(LIB_SHARE)/* 
