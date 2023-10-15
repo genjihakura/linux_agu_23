@@ -4,16 +4,19 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <string.h>
-#include <unistd.h>
 #include <pthread.h>
 #include <errno.h>
 #include <sys/socket.h>     //  Chứa cấu trúc cần thiết cho socket.
 #include <netinet/in.h>     //  Thư viện chứa các hằng số, cấu trúc khi sử dụng địa chỉ trên internet
 #include <arpa/inet.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #define LISTEN_BACKLOG 50
-#define BUFF_SIZE 256
+#define BUFF_SIZE 255
 #define handle_error(msg) do { perror(msg); exit(EXIT_FAILURE); } while (0)
+#define FIFO_FILE   "logFifo"
+
 
 pthread_mutex_t lock_connect = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t lock_data = PTHREAD_MUTEX_INITIALIZER;
@@ -64,6 +67,22 @@ static void *Connect_handle(void *args)
     pthread_mutex_lock(&lock_connect);
     if(thr->IsChild == 0){
     // log process thread
+        char buff[BUFF_SIZE];
+        int fd; 
+        unsigned char size_buff = BUFF_SIZE;
+        mkfifo(FIFO_FILE, 0666);
+        while (1) {
+            // Write first
+            // printf("Message to comsumer : "); fflush(stdin);
+            // fgets(buff, BUFF_SIZE, stdin);
+            sprintf(buff, "%f", dataSensor.Temperature );
+            fd = open(FIFO_FILE, O_WRONLY);
+            write(fd, buff, strlen(buff) +1);
+            close(fd);
+        }
+        pthread_cond_signal(&cond_connect);
+        pthread_mutex_unlock(&lock_connect);
+        pthread_exit(NULL); // exit
 
     } else {
     // Main process thread
@@ -112,6 +131,7 @@ static void *Connect_handle(void *args)
             char temp[BUFF_SIZE];
             inet_ntop(client_addr.sin_family, (struct sockaddr*)&client_addr, temp, sizeof(temp));
             printf("Server : got connection \n");
+            printf("socket_fd : %d \n", new_socket_fd);
             ServerReadDataAndWriteDataToShareStruct(new_socket_fd);
             // close(server_fd);
         }

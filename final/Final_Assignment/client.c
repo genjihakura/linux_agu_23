@@ -6,7 +6,8 @@
 #include <netinet/in.h>     //  Thư viện chứa các hằng số, cấu trúc khi sử dụng địa chỉ trên internet
 #include <arpa/inet.h>
 #include <unistd.h>
-
+#include <fcntl.h>
+#include <sys/stat.h>
 
 
 #define BUFF_SIZE 256
@@ -55,13 +56,41 @@ int main(int argc, char *argv[])
     }
     printf("line : %d connect() success !!!\n",__LINE__ );
     sendDatatoServer(server_fd,temperature);
-    sleep(1);
-    sendDatatoServer(server_fd,temperature+1.f);
-    sleep(1);
-    sendDatatoServer(server_fd,temperature+0.5f); 
-    sleep(1);
     printf("line : %d close() server_fd !!!\n",__LINE__ );      
     close(server_fd); /*close*/
+    sleep(5);
+
+        /* Tạo socket */
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd == -1){
+        handle_error("socket()");
+    }
+    /* Kết nối tới server*/
+    if (connect(server_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1){
+
+        handle_error("connect()");
+    }
+    printf("line : %d connect() success !!!\n",__LINE__ );
+    sendDatatoServer(server_fd,temperature+1.f); 
+    printf("line : %d close() server_fd !!!\n",__LINE__ );      
+    close(server_fd); /*close*/
+
+    sleep(5);
+        /* Tạo socket */
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd == -1){
+        handle_error("socket()");
+    }
+    /* Kết nối tới server*/
+    if (connect(server_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1){
+
+        handle_error("connect()");
+    }
+    printf("line : %d connect() success !!!\n",__LINE__ );
+    sendDatatoServer(server_fd,temperature+0.5f); 
+    printf("line : %d close() server_fd !!!\n",__LINE__ );      
+    close(server_fd); /*close*/
+
     return 0;
 }
 
