@@ -34,6 +34,9 @@ typedef struct _log_event {
     int  SquenceNumber;
     int  NodeID;
     float Temperature;
+    float sum;
+    int numberReceive;
+    float TempVar;
     unsigned long int Timestamp;
 } log_event;
 
@@ -43,39 +46,57 @@ typedef struct _thread_args_t{
 
 //share memory
 log_event dataSensor;
-/* Chức năng chat */
+/* Chức năng receive */
 void ServerReadDataAndWriteDataToShareStruct(int new_socket_fd)
 {
     char recvbuff[BUFF_SIZE];
     int numb_read, numb_write;
+    int number=0;
+    char *p;
+
     memset(&recvbuff, '0', sizeof(log_event));
     numb_read = recv(new_socket_fd, &recvbuff, BUFF_SIZE, 0);
     if(numb_read == -1){
         handle_error("recv() form socket");
     }
-    dataSensor.Temperature = atof(recvbuff);
-    printf("line : %d temperature : %f \n",__LINE__, dataSensor.Temperature );
-
+    p = strtok(recvbuff, " ");
+    printf("%s\n", p);
+    while(p != NULL) {
+        //Chỉ dịnh đối số NULL trong hàm strtok để tiếp tục tách chuỗi ban đầu
+        p = strtok(NULL, " ");
+        if(p != NULL) {
+            printf("%s\n", p);
+            number++;
+            if(number == 2){
+                dataSensor.Temperature = atof(p);    
+            }
+            
+        }
+    }
+   dataSensor.sum += dataSensor.Temperature;
+   printf("line : %d temperature : %f \n",__LINE__, dataSensor.sum);
 }
-
 
 //Server TCP
 //Listen on a TCP socket for incoming connect request from new sensor nodes
 static void *Connect_handle(void *args)
-{
+{ 
+    printf("===== Connect Handle =====\n");
     thread_args_t *thr = (thread_args_t *)args;
     pthread_mutex_lock(&lock_connect);
     if(thr->IsChild == 0){
+        printf("process child is run \n");
     // log process thread
         char buff[BUFF_SIZE];
         int fd; 
         unsigned char size_buff = BUFF_SIZE;
         mkfifo(FIFO_FILE, 0666);
-        while (1) {
+        while (dataSensor.Temperature != 0) {
             // Write first
             // printf("Message to comsumer : "); fflush(stdin);
             // fgets(buff, BUFF_SIZE, stdin);
-            sprintf(buff, "%f", dataSensor.Temperature );
+            // printf("%f \n",dataSensor.TempVar);
+            sprintf(buff, "%f", dataSensor.TempVar);
             fd = open(FIFO_FILE, O_WRONLY);
             write(fd, buff, strlen(buff) +1);
             close(fd);
@@ -86,7 +107,7 @@ static void *Connect_handle(void *args)
 
     } else {
     // Main process thread
-
+        printf("process parent \n");
         memset(&serv_addr, 0, sizeof(struct sockaddr_in));
         memset(&client_addr, 0, sizeof(struct sockaddr_in));
 
@@ -96,7 +117,6 @@ static void *Connect_handle(void *args)
             handle_error("socket()");
         }
         // fprintf(stderr, "ERROR on socket() : %s\n", strerror(errno));
-
         /* Ngăn lỗi : “address already in use” */
         if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))){
             handle_error("setsockopt()");
@@ -121,7 +141,7 @@ static void *Connect_handle(void *args)
         len = sizeof(client_addr);
         
         while (1) {
-            printf("Server is listening at port : %d \n....\n",port_no);
+            printf("Server is listening at port : %d \n",port_no);
             new_socket_fd = accept(server_fd, (struct sockaddr*)&client_addr, (socklen_t *)&len);
             if (new_socket_fd == -1)
             {
@@ -132,24 +152,24 @@ static void *Connect_handle(void *args)
             inet_ntop(client_addr.sin_family, (struct sockaddr*)&client_addr, temp, sizeof(temp));
             printf("Server : got connection \n");
             printf("socket_fd : %d \n", new_socket_fd);
+            dataSensor.numberReceive++;
             ServerReadDataAndWriteDataToShareStruct(new_socket_fd);
-            // close(server_fd);
         }
     }
+    close(new_socket_fd);
     close(server_fd);
     pthread_cond_signal(&cond_connect);
     pthread_mutex_unlock(&lock_connect);
-    pthread_exit(NULL); // exit
+    pthread_exit(NULL); // exit  
+
 }
-//
-
-
 
 static void *Data_handle(void *args)
 {  
     thread_args_t *thr = (thread_args_t *)args;
     float sum = 0;
     float avrg = 0;
+    printf("=======Data_handle=======\n");
     pthread_mutex_lock(&lock_connect);
     if(thr->IsChild == 0){
         // log process thread
@@ -157,8 +177,10 @@ static void *Data_handle(void *args)
         //Main process thread
         //read data from share data, calculate a running average on the temperature  use the result to decide  on 'too/hot/cold'
         //this function only read data and calculate 
-        sum += dataSensor.Temperature;
+        dataSensor.TempVar = dataSensor.sum / dataSensor.numberReceive;
+        printf("dataSensor.TempVar %f \n", dataSensor.TempVar);
     }
+    pthread_cond_signal(&cond_connect);
     pthread_mutex_unlock(&lock_connect);
     pthread_exit(NULL); // exit
 
@@ -169,11 +191,15 @@ static void *Storage_manager_handle(void *args)
 
     thread_args_t *thr = (thread_args_t *)args;
     pthread_mutex_lock(&lock_connect);
+    printf("=======Storage_manager_handle=======\n");
     if(thr->IsChild == 0){
         // log process thread
+        printf("line : %d \n", __LINE__);
     }else{
         //Main process thread
+        printf("line : %d \n", __LINE__);
     }
+    pthread_cond_signal(&cond_connect);
     pthread_mutex_unlock(&lock_connect);
     pthread_exit(NULL); // exit
 }

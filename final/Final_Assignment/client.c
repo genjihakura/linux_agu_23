@@ -8,7 +8,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-
+#include <time.h>
 
 #define BUFF_SIZE 256
 #define handle_error(msg) \
@@ -20,7 +20,7 @@ typedef struct _log_event {
     char Msg[255];
     unsigned long int Timestamp;
 } log_event;
-void sendDatatoServer(int server_fd,float temperature );
+void sendDatatoServer(int server_fd,float temperature, int sensorID, time_t  curtime);
 
 int main(int argc, char *argv[])
 {
@@ -28,14 +28,18 @@ int main(int argc, char *argv[])
     int server_fd;
     struct sockaddr_in serv_addr;
     float temperature;
+    int sensorID = 0;
+    time_t curtime;
+    
     memset(&serv_addr, '0',sizeof(serv_addr));
     /* Đọc portnumber từ command line */
-    if (argc < 4) {
-        printf("command : ./client <server address> <port number>\n");
+    if (argc < 5) {
+        printf("command : ./client <server address> <port number> <sensor ID> <temperature>\n");
         exit(1);
     }
     portno = atoi(argv[2]);
-    temperature = atof(argv[3]);
+    sensorID = atoi(argv[3]);
+    temperature = atof(argv[4]);
     printf("line : %d portno :%d \n",__LINE__ ,portno);
     /* Khởi tạo địa chỉ server */
     serv_addr.sin_family = AF_INET;
@@ -54,9 +58,8 @@ int main(int argc, char *argv[])
 
         handle_error("connect()");
     }
-    printf("line : %d connect() success !!!\n",__LINE__ );
-    sendDatatoServer(server_fd,temperature);
-    printf("line : %d close() server_fd !!!\n",__LINE__ );      
+    time(&curtime);
+    sendDatatoServer(server_fd,temperature,sensorID,curtime);     
     close(server_fd); /*close*/
     sleep(5);
 
@@ -70,9 +73,8 @@ int main(int argc, char *argv[])
 
         handle_error("connect()");
     }
-    printf("line : %d connect() success !!!\n",__LINE__ );
-    sendDatatoServer(server_fd,temperature+1.f); 
-    printf("line : %d close() server_fd !!!\n",__LINE__ );      
+    time(&curtime);
+    sendDatatoServer(server_fd,temperature+1,sensorID,curtime); 
     close(server_fd); /*close*/
 
     sleep(5);
@@ -86,9 +88,8 @@ int main(int argc, char *argv[])
 
         handle_error("connect()");
     }
-    printf("line : %d connect() success !!!\n",__LINE__ );
-    sendDatatoServer(server_fd,temperature+0.5f); 
-    printf("line : %d close() server_fd !!!\n",__LINE__ );      
+    time(&curtime);
+    sendDatatoServer(server_fd,temperature+0.5,sensorID,curtime); 
     close(server_fd); /*close*/
 
     return 0;
@@ -96,14 +97,18 @@ int main(int argc, char *argv[])
 
 
 /* Chức năng chat */
-void sendDatatoServer(int server_fd, float temperature)
+void sendDatatoServer(int server_fd, float temperature,int sensorID, time_t  curtime)
 {
     int numb_write, numb_read;
     char Msg[256];
+    struct tm *info;
+    info =  localtime( &curtime );
     log_event sendbuff;
     memset(Msg, '0', sizeof(Msg));
-    snprintf(Msg,sizeof(Msg),"%f",temperature);
-    printf("line : %d sendDatatoServer() !!!\n",__LINE__ );
+
+
+    snprintf(Msg,sizeof(Msg),"%d:%d:%d %d %f",info->tm_hour, info->tm_min, info->tm_sec, sensorID, temperature);
+    printf("line : %d Msg  %s !!!\n",__LINE__,Msg);
     numb_write = send(server_fd, &Msg, sizeof(Msg), 0);
     if (numb_write == -1){
         handle_error("send()");
